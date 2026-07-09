@@ -19,13 +19,12 @@ class OpenAIRealtimeTranscriber {
 
   async start(session, stream) {
     this.stopped = false;
-    const url = session.wsUrl || 'wss://api.openai.com/v1/realtime?intent=transcription';
-    // 浏览器 WebSocket 不能自定义 Header,ephemeral token 走子协议传递
-    this.ws = new WebSocket(url, [
-      'realtime',
-      'openai-insecure-api-key.' + session.token,
-      'openai-beta.realtime-v1',
-    ]);
+    const url = session.wsUrl || 'wss://api.openai.com/v1/realtime';
+    // 浏览器 WebSocket 不能自定义 Header,ephemeral token 走子协议传递。
+    // GA 正式版不能带 openai-beta.realtime-v1,否则报 beta_api_shape_disabled。
+    const protocols = ['realtime', 'openai-insecure-api-key.' + session.token];
+    if (session.shape === 'beta') protocols.push('openai-beta.realtime-v1');
+    this.ws = new WebSocket(url, protocols);
 
     this.ws.onopen = () => {
       this.cb.onState('live');

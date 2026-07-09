@@ -38,6 +38,7 @@ async function mintOpenAI(asrPrompt) {
   };
 
   // 首选:GA 版 client_secrets 端点
+  let shape = 'ga';
   let r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -78,6 +79,7 @@ async function mintOpenAI(asrPrompt) {
       throw new Error(`OpenAI 两个端点都失败。client_secrets: ${r.status} ${t1.slice(0, 300)} | transcription_sessions: ${fallback.status} ${t2.slice(0, 300)}。请对照 OpenAI 当前 Realtime transcription 文档改本函数。`);
     }
     r = fallback;
+    shape = 'beta';
   }
 
   const data = await r.json();
@@ -88,7 +90,11 @@ async function mintOpenAI(asrPrompt) {
     provider: 'openai',
     token,
     model,
-    wsUrl: 'wss://api.openai.com/v1/realtime?intent=transcription',
+    shape,
+    // GA 正式版:纯 /v1/realtime,不带 intent 参数;仅当走了旧 beta 兜底时才用旧地址
+    wsUrl: shape === 'beta'
+      ? 'wss://api.openai.com/v1/realtime?intent=transcription'
+      : 'wss://api.openai.com/v1/realtime',
   };
 }
 
