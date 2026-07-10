@@ -208,14 +208,15 @@ async function connectASR() {
   const r = await fetch('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ asrPrompt: Glossary.asrPrompt() }),
+    // GA 的 gpt-realtime-whisper 暂不接受 prompt;术语表仍会在翻译阶段用于纠错和统一译名。
+    body: JSON.stringify({}),
   });
   const session = await r.json();
   if (!r.ok) throw new Error(session.error || 'session 接口失败');
 
   S.transcriber = window.KissaProviders.createTranscriber(session.provider, {
-    onPartial: (delta) => {
-      S.partial += delta;
+    onPartial: (text, replace = false) => {
+      S.partial = replace ? text : S.partial + text;
       $('partialJa').textContent = S.partial;
     },
     onFinal: (text) => {
@@ -526,7 +527,12 @@ function mergeTerms(a, b) {
 window.addEventListener('load', () => {
   bindUI();
   refreshSubjectSelect();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register('./sw.js', { updateViaCache: 'none' })
+      .then((registration) => registration.update())
+      .catch(() => {});
+  }
   // 恢复未导出字幕的提示
   const saved = store.get('kissa.session', null);
   if (saved && saved.lines && saved.lines.length) {

@@ -1,0 +1,16 @@
+喫茶マクロ同声传译：Realtime GA 修正版（2026-07-10）
+
+这版解决 beta_api_shape_disabled，已经删除全部 Realtime Beta 连接方式。
+
+兔子的更新方法：
+1. 用本 ZIP 里的 kissa 文件夹完整覆盖 GitHub 仓库里的旧文件。
+2. 等 Vercel 自动部署完成。
+3. 关闭旧 PWA，再从浏览器打开 Vercel 网址并刷新一次。
+4. 不需要更换 OPENAI_API_KEY。
+
+环境变量：
+- OPENAI_API_KEY：保留原来的。
+- ASR_MODEL：一般不用填；即使残留 gpt-4o-transcribe，程序也会自动改用 gpt-realtime-whisper。
+- ASR_DELAY：可选，默认 low；需要更偏准确时可填 medium。
+
+若仍报错，请把页面上的完整错误和 Vercel 的 /api/session 日志交给 GPT。
