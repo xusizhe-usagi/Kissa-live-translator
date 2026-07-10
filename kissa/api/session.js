@@ -1,18 +1,18 @@
-// api/session.js — 给浏览器发放短时效令牌,真正的 API key 永远只待在服务端。
-// 前端 POST /api/session → { provider, token, model, language, delay, wsUrl }
+// api/session.js — 给浏览器发放"短时效令牌",真正的 API key 永远只待在这里(服务端)。
+// 前端 POST /api/session { asrPrompt?: string } → { provider, token, model, wsUrl }
 //
 // 换 ASR 供应商:设置 Vercel 环境变量 ASR_PROVIDER = openai | deepgram | soniox
 // 每个供应商一个 mint 函数,照着 mintOpenAI 的样子补全即可。
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
 
   const provider = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
+  const asrPrompt = (req.body && req.body.asrPrompt ? String(req.body.asrPrompt) : '').slice(0, 800);
 
   try {
     let out;
-    if (provider === 'openai') out = await mintOpenAI();
+    if (provider === 'openai') out = await mintOpenAI(asrPrompt);
     else if (provider === 'deepgram') out = await mintDeepgram();
     else if (provider === 'soniox') out = await mintSoniox();
     else return res.status(400).json({ error: `unknown ASR_PROVIDER: ${provider}` });
@@ -24,51 +24,42 @@ export default async function handler(req, res) {
 }
 
 /* ---------------- OpenAI Realtime(转写模式) ---------------- */
-// 2026-07 GA:实时流式转写使用 gpt-realtime-whisper。
-// gpt-4o-transcribe / gpt-4o-mini-transcribe 属于请求式转写,不能再当作 Realtime 模型。
-async function mintOpenAI() {
+// 模型可用环境变量 ASR_MODEL 覆盖,例如 gpt-4o-transcribe / gpt-4o-mini-transcribe
+// 或你账号里更新的转写模型名。
+async function mintOpenAI(asrPrompt) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY 未配置(Vercel → Settings → Environment Variables)');
+  const model = process.env.ASR_MODEL || 'gpt-4o-transcribe';
 
-  const requestedModel = String(process.env.ASR_MODEL || '').trim();
-  const requestOnlyModels = new Set([
-    'gpt-4o-transcribe',
-    'gpt-4o-mini-transcribe',
-    'whisper-1',
-  ]);
-  // 兼容兔子在 Vercel 里可能残留的旧 ASR_MODEL,避免升级后还要手工删变量。
-  const model = !requestedModel || requestOnlyModels.has(requestedModel)
-    ? 'gpt-realtime-whisper'
-    : requestedModel;
-  const allowedDelays = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
-  const requestedDelay = String(process.env.ASR_DELAY || 'low').toLowerCase();
-  const delay = allowedDelays.has(requestedDelay) ? requestedDelay : 'low';
-  const language = 'ja';
-
-  const session = {
-    type: 'transcription',
-    audio: {
-      input: {
-        format: { type: 'audio/pcm', rate: 24000 },
-        transcription: { model, language, delay },
-        // gpt-realtime-whisper 的 GA 模式由客户端提交音频段,不能沿用旧 Beta 的 server_vad。
-        turn_detection: null,
-      },
-    },
+  const transcriptionCfg = {
+    model,
+    language: 'ja',
+    prompt: asrPrompt || undefined,
   };
 
+  // GA 正式版 client_secrets 端点(Beta 已被 OpenAI 关停,不再兜底)
   const r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ session }),
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      expires_after: { anchor: 'created_at', seconds: 600 },
+      session: {
+        type: 'transcription',
+        audio: {
+          input: {
+            format: { type: 'audio/pcm', rate: 24000 },
+            transcription: transcriptionCfg,
+            turn_detection: { type: 'server_vad', silence_duration_ms: 600 },
+            noise_reduction: { type: 'far_field' },
+          },
+        },
+      },
+    }),
   });
 
   if (!r.ok) {
-    const detail = (await r.text()).slice(0, 600);
-    throw new Error(`OpenAI Realtime GA 创建会话失败(${r.status}): ${detail}`);
+    const t = await r.text();
+    throw new Error(`OpenAI client_secrets ${r.status}: ${t.slice(0, 400)}`);
   }
 
   const data = await r.json();
@@ -79,11 +70,7 @@ async function mintOpenAI() {
     provider: 'openai',
     token,
     model,
-    language,
-    delay,
     shape: 'ga',
-    expiresAt: data.expires_at || (data.client_secret && data.client_secret.expires_at) || null,
-    // GA 正式版必须是纯 /v1/realtime:不带 intent,也不带任何 Beta header/subprotocol。
     wsUrl: 'wss://api.openai.com/v1/realtime',
   };
 }

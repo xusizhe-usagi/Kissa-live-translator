@@ -1,4 +1,4 @@
-# 喫茶マクロ 同声传译 PWA（Realtime GA 修正版）
+# 喫茶マクロ 同声传译 PWA
 
 日语课堂 → 实时日文字幕 + 中文字幕 + 全程录音备份。宏观经济学术语表(383 词)已内置。
 
@@ -11,8 +11,7 @@
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `OPENAI_API_KEY` | ✅ | 你的 key,只存在服务端 |
-| `ASR_MODEL` | 可选 | 实时转写默认 `gpt-realtime-whisper`;一般不要填写。若 Vercel 残留旧的 `gpt-4o-transcribe`/mini 值,程序会自动迁移到新模型 |
-| `ASR_DELAY` | 可选 | `minimal`/`low`/`medium`/`high`/`xhigh`,默认 `low`;越高通常越偏准确、越慢 |
+| `ASR_MODEL` | 可选 | 转写模型,默认 `gpt-4o-transcribe`;想省钱改 `gpt-4o-mini-transcribe`,账号里有更新的转写模型也填这里 |
 | `TRANSLATE_MODEL` | 可选 | 翻译模型,默认 `gpt-4o-mini`;想用你说的那个 mini 模型,把它的**正式 API 模型名**填进来即可 |
 | `TRANSLATE_PROVIDER` | 可选 | `openai`(默认)/ `anthropic` / `gemini` |
 | `ASR_PROVIDER` | 可选 | `openai`(默认)/ `deepgram`(骨架已留) |
@@ -51,7 +50,7 @@
    - 纯文本 `日语=中文`
 3. **让 GPT 照样再产一包**:你那个提取流程对新学科的讲义再跑一遍,导出 json 扔进来就行。
 
-省钱设计:术语表再大也不怕——翻译时只把**当前这句话里命中的术语**(按优先级最多 40 条)塞进 prompt。当前 GA 的 `gpt-realtime-whisper` 不接受转写 prompt,所以术语表主要在中文翻译阶段纠正识别错字并统一译名。
+省钱设计:术语表再大也不怕——翻译时只把**当前这句话里命中的术语**(按优先级最多 40 条)塞进 prompt;转写提示词只取 priority=1 的高频考试词,截断到 700 字符。
 
 ## 五、换模型 / 换供应商(接口都留好了)
 
@@ -64,17 +63,13 @@
 | 现象 | 处理 |
 |---|---|
 | 点开始后一直"连接中" | 打开 Vercel 的 Functions 日志看 `/api/session` 报错;多半是 key 没配或模型名不对 |
-| 出现 `beta_api_shape_disabled` | 说明浏览器仍缓存旧版。关闭已安装的 PWA,在浏览器里重新打开网址并刷新一次;本包已经彻底移除 Beta 接口 |
-| `/api/session` 报 GA 创建会话失败 | 确认 `OPENAI_API_KEY` 有效;若手工设置过 `ASR_MODEL`,先删除该变量再重新部署 |
+| `/api/session` 报两个端点都失败 | OpenAI 的 realtime 转写端点/参数偶有版本变化,对照其当前文档只需改 `api/session.js` 里 `mintOpenAI` 一个函数 |
 | 有日文字幕但中文一直"…" | 看 `/api/translate` 日志,通常是 `TRANSLATE_MODEL` 模型名写错 |
 | iPhone 锁屏后没声音了 | 正常限制。开着屏幕放桌上,App 已申请常亮 |
 | 教室 WiFi 烂 | 直接用流量,90 分钟音频上行大约 100–200MB 级别 |
 
-## 七、这次修复了什么
+## 七、费用(2026 年中的行情,以官方 pricing 页为准)
 
-- 彻底删除停用的 Realtime Beta 端点、header、subprotocol 和 `intent=transcription`。
-- 切换到 GA 流式模型 `gpt-realtime-whisper` 与 `/v1/realtime/client_secrets`。
-- 麦克风音频可靠重采样为 24kHz PCM16,按 100ms 打包,自动静音断句且最长 6 秒提交一次。
-- PWA 改为代码优先联网更新并升级缓存版本,以后部署修复后不会长期卡在旧 JS。
-
-模型能力和价格会变化,请以 OpenAI 官方实时转写文档与 Pricing 页面为准。
+- 转写 `gpt-4o-transcribe` ≈ $0.006/分钟 → **一小时 ≈ $0.36**;mini 版减半(≈$0.18/时)
+- 翻译 mini 模型:一节课的文字量只有几万 token → **不到 $0.05**
+- 合计:**一节 90 分钟的课 ≈ $0.3–0.6,约人民币 2–4.5 元**;Vercel 免费额度足够
