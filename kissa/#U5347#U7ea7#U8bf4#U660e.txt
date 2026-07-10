@@ -1,0 +1,18 @@
+喫茶マクロ同声传译：课堂高准确修正版 v3（2026-07-10）
+
+上一版虽然解决了 beta_api_shape_disabled，但 gpt-realtime-whisper 会漏听并把课堂日语切成单词碎片。
+本版默认改回更准确的 gpt-4o-transcribe，并把 4–12 秒完整语句一起识别和翻译。
+
+兔子的更新方法：
+1. 用本 ZIP 里的 kissa 文件夹完整覆盖 GitHub 仓库里的旧文件。
+2. 等 Vercel 自动部署完成。
+3. 关闭旧 PWA，再从浏览器打开 Vercel 网址并刷新一次。
+4. 不需要更换 OPENAI_API_KEY。
+
+环境变量：
+- OPENAI_API_KEY：保留原来的。
+- ASR_MODEL：一般不用填，默认 gpt-4o-transcribe。
+- ASR_MODE：一般不用填，默认 accurate。不要设置成 realtime，除非愿意牺牲准确度换最低延迟。
+- ASR_DELAY：默认高准确模式不使用这个变量。
+
+若仍报错，请把页面上的完整错误和 Vercel 的 /api/session 日志交给 GPT。
