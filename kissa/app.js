@@ -95,7 +95,7 @@ const Glossary = {
   asrPrompt() {
     const { name, terms } = this.current();
     const sorted = [...terms].sort((a, b) => (a.p || 3) - (b.p || 3));
-    let s = `大学${name}讲义、期末考试重点。専門用語: `;
+    let s = `大学の${name}の講義です。期末試験の重点を説明しています。専門用語：`;
     for (const t of sorted) {
       const piece = t.ja + (t.en ? `(${t.en})` : '') + '、';
       if (s.length + piece.length > 700) break;
@@ -208,14 +208,16 @@ async function connectASR() {
   const r = await fetch('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ asrPrompt: Glossary.asrPrompt() }),
+    body: JSON.stringify({}),
   });
   const session = await r.json();
   if (!r.ok) throw new Error(session.error || 'session 接口失败');
+  // 高准确模式会把术语表和上一段字幕一起交给 gpt-4o-transcribe。
+  session.asrPrompt = Glossary.asrPrompt();
 
   S.transcriber = window.KissaProviders.createTranscriber(session.provider, {
-    onPartial: (delta) => {
-      S.partial += delta;
+    onPartial: (text, replace = false) => {
+      S.partial = replace ? text : S.partial + text;
       $('partialJa').textContent = S.partial;
     },
     onFinal: (text) => {
@@ -224,7 +226,10 @@ async function connectASR() {
       addLine(text);
     },
     onState: (st) => {
-      if (st === 'live') { S.reconnectAttempts = 0; setStatus('live', '同传中'); }
+      if (st === 'live') {
+        S.reconnectAttempts = 0;
+        setStatus('live', session.mode === 'accurate' ? '高准确同传中' : '低延迟同传中');
+      }
       else if (st === 'dropped') scheduleReconnect();
       else if (st === 'idle') setStatus('idle', '待机');
     },
@@ -526,7 +531,12 @@ function mergeTerms(a, b) {
 window.addEventListener('load', () => {
   bindUI();
   refreshSubjectSelect();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register('./sw.js', { updateViaCache: 'none' })
+      .then((registration) => registration.update())
+      .catch(() => {});
+  }
   // 恢复未导出字幕的提示
   const saved = store.get('kissa.session', null);
   if (saved && saved.lines && saved.lines.length) {
