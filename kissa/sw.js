@@ -1,6 +1,6 @@
 // PWA 外壳缓存。版本名必须随接口/前端升级一起变,避免部署后仍运行旧 Beta 代码。
-const CACHE = 'kissa-accurate-20260710-v5';
-const SHELL = ['./', './index.html', './app.js?v=20260710-accurate5', './providers.js?v=20260710-accurate5', './glossary-builtin.js?v=20260710-accurate5',
+const CACHE = 'kissa-accurate-20260710-v3';
+const SHELL = ['./', './index.html', './app.js?v=20260710-accurate3', './providers.js?v=20260710-accurate3', './glossary-builtin.js?v=20260710-accurate3',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

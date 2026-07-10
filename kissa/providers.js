@@ -118,7 +118,6 @@ class OpenAIAccurateTranscriber {
     this.segmentMs = 0;
     this.voiceSeen = false;
     this.silenceMs = 0;
-    this.segmentPeak = 0;
     this.noiseFloor = 0.002;
     this.lastTranscript = '';
     this.uploadChain = Promise.resolve();
@@ -146,7 +145,6 @@ class OpenAIAccurateTranscriber {
     if (this.stopped) return;
     this.frames.push(buf);
     this.segmentMs += durationMs;
-    if (level > this.segmentPeak) this.segmentPeak = level;
 
     const threshold = Math.max(0.0035, this.noiseFloor * 2.0);
     const speaking = level > threshold;
@@ -163,14 +161,8 @@ class OpenAIAccurateTranscriber {
     const silenceMs = this.session.silenceMs || 1300;
     const maxMs = this.session.maxSegmentMs || 12000;
     const fullPhrase = this.voiceSeen && this.segmentMs >= minMs && this.silenceMs >= silenceMs;
-    if (fullPhrase) { this._queueSegment(); return; }
-    if (this.segmentMs >= maxMs) {
-      // 远场轻声(峰值明显高于噪声底)照常上传,绝不漏掉老师;
-      // 真·静音段直接丢弃——静音喂给转写模型极易产生幻觉文本,还会经 previous 传染下一段。
-      const quietVoice = this.segmentPeak > Math.max(0.0025, this.noiseFloor * 1.4);
-      if (this.voiceSeen || quietVoice) this._queueSegment();
-      else this._dropSegmentKeepTail();
-    }
+    // 即使远距离人声没越过本地阈值，12 秒也会送去模型判断，绝不漏掉老师讲话。
+    if (fullPhrase || this.segmentMs >= maxMs) this._queueSegment();
   }
 
   _queueSegment(force = false) {
@@ -224,17 +216,6 @@ class OpenAIAccurateTranscriber {
     this.segmentMs = 0;
     this.voiceSeen = false;
     this.silenceMs = 0;
-    this.segmentPeak = 0;
-  }
-
-  // 丢弃静音段,但保留最后约 1 秒音频,防止老师恰好在边界开口时被切掉句首
-  _dropSegmentKeepTail() {
-    const frameMs = this.session.frameMs || 100;
-    const keep = Math.ceil(1000 / frameMs);
-    const tail = this.frames.slice(-keep);
-    this._resetSegment();
-    this.frames = tail;
-    this.segmentMs = tail.length * frameMs;
   }
 
   stop() {

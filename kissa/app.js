@@ -94,10 +94,8 @@ const Glossary = {
   // ASR 提示词:高频考试词优先,控制在 ~700 字符
   asrPrompt() {
     const { name, terms } = this.current();
-    const base = `大学の${name}の講義です。期末試験の重点を説明しています。`;
-    if (!terms.length) return base; // 空术语表:只给课堂背景,不挂空的専門用語
     const sorted = [...terms].sort((a, b) => (a.p || 3) - (b.p || 3));
-    let s = base + '専門用語：';
+    let s = `大学の${name}の講義です。期末試験の重点を説明しています。専門用語：`;
     for (const t of sorted) {
       const piece = t.ja + (t.en ? `(${t.en})` : '') + '、';
       if (s.length + piece.length > 700) break;
